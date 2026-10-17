@@ -44,6 +44,14 @@
             }
         });
 
+        let handleRect = {
+            line: 0,
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0
+        };
+
         function handleImageUpload(e) {
             const file = e.target.files[0];
             
@@ -57,28 +65,27 @@
                 // Resize the canvas to match the uploaded image dimensions
                 canvas.width = window.innerWidth-10; // Set canvas width to the page width
                 canvas.height = (window.innerWidth-10) * (img.height / img.width); // Maintain aspect ratio based on the image's dimensions
+                console.log(`Canvas resized to: ${canvas.width}x${canvas.height}`);
 
                 // Clear the canvas and draw the image at position (0,0)
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                // scale image to fit canvas width and height while maintaining aspect ratio
-                ctx.scale(canvas.width / img.width, canvas.height / img.height); // Scale the image to fit the canvas
-                ctx.drawImage(img, 0, 0);
+                // Draws and stretches the image to match the exact size of the canvas
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
                 
+                console.log(`Image drawn at (0,0) with dimensions: ${img.width}x${img.height}`);
+
                 // Add rect target manipulators for the repeating image zooming effect
-                margin = canvas.width / 32; // Set margin to 1/32 of the canvas width
-                let handleRect = {
+                let margin = canvas.width / 8; // Set margin to 1/32 of the canvas width
+                handleRect = {
+                    line: canvas.width / 128, // Set line width relative to the rectangle size
                     x: margin,
                     y: margin,
                     width: canvas.width - (margin * 2),
                     height: canvas.height - (margin * 2)
                 };
-                ctx.strokeStyle = 'red';
-                ctx.lineWidth = handleRect.width / 128; // Set line width relative to the rectangle size
-                console.log(ctx.lineWidth);
+                drawHandleRect(); // Draw the rectangle on the canvas
 
-                // Draw the rectangle path directly
-                ctx.strokeRect(handleRect.x, handleRect.y, handleRect.width, handleRect.height);
-                
                 // Clean up the memory allocated for the object URL
                 URL.revokeObjectURL(img.src);
             };
@@ -90,17 +97,18 @@
         function drawHandleRect() {
             // 1. Ensure ctx is correctly referenced and handleRect properties match lowercase/uppercase expectations.
             // 2. Fallback check: if width/height are named 'w' or 'h' instead of 'width' or 'height', map them.
-            const x = handleRect.x;
-            const y = handleRect.y;
-            const w = handleRect.width !== undefined ? handleRect.width : handleRect.w;
-            const h = handleRect.height !== undefined ? handleRect.height : handleRect.h;
-
-            console.log(`Drawing rectangle at (${x}, ${y}) with width ${w} and height ${h}`);
+            console.log(`Drawing rectangle at (${handleRect.x}, ${handleRect.y}) with width ${handleRect.width} and height ${handleRect.height}`);
             ctx.strokeStyle = 'red';
-            ctx.lineWidth = 4;
+            ctx.lineWidth = handleRect.line;
             
             // Draw the rectangle path directly
-            ctx.strokeRect(x, y, w, h);
+            ctx.strokeRect(handleRect.x, handleRect.y, handleRect.width, handleRect.height);
+        
+            // draw 9 small squares at the corners and midpoints of the rectangle for resizing handles
+            const handleSize = handleRect.line*5; // Size of the small squares
+            ctx.fillStyle = 'blue';
+            // Top-left corner
+            
         }
 
 
