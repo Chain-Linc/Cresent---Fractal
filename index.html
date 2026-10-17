@@ -12,7 +12,7 @@
         }
         canvas {
             border: 4px dashed #ccc;
-            margin: 15px;
+            margin: 5px;
             display: block;
             max-width: 100%;
         }
@@ -55,23 +55,29 @@
             // When the image loads, draw it to the canvas
             img.onload = function() {
                 // Resize the canvas to match the uploaded image dimensions
-                canvas.width = window.innerWidth; // Set canvas width to the page width
-                canvas.height = window.innerWidth * (img.height / img.width); // Maintain aspect ratio based on the image's dimensions
+                canvas.width = window.innerWidth-10; // Set canvas width to the page width
+                canvas.height = (window.innerWidth-10) * (img.height / img.width); // Maintain aspect ratio based on the image's dimensions
 
                 // Clear the canvas and draw the image at position (0,0)
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                // scale image to fit canvas width and height while maintaining aspect ratio
                 ctx.scale(canvas.width / img.width, canvas.height / img.height); // Scale the image to fit the canvas
                 ctx.drawImage(img, 0, 0);
                 
                 // Add rect target manipulators for the repeating image zooming effect
+                margin = canvas.width / 32; // Set margin to 1/32 of the canvas width
                 let handleRect = {
-                    x: canvas.width / 8,
-                    y: canvas.height / 8,
-                    width: canvas.width - (canvas.width / 4),
-                    height: canvas.height - (canvas.height / 4)
+                    x: margin,
+                    y: margin,
+                    width: canvas.width - (margin * 2),
+                    height: canvas.height - (margin * 2)
                 };
-                console.log(`Drawing rectangle at (${x}, ${y}) with width ${w} and height ${h}2`);
-                drawHandleRect();
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = handleRect.width / 128; // Set line width relative to the rectangle size
+                console.log(ctx.lineWidth);
+
+                // Draw the rectangle path directly
+                ctx.strokeRect(handleRect.x, handleRect.y, handleRect.width, handleRect.height);
                 
                 // Clean up the memory allocated for the object URL
                 URL.revokeObjectURL(img.src);
