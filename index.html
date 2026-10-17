@@ -249,27 +249,44 @@
             currentAspectRatio = img.width / img.height;
             targetAspectRatio = handleRect.width / handleRect.height;
             interpolation = 0; // Start with no zoom
+            
+            let i = 0;
+            let maxFrames = 100; // Set a maximum number of frames for the GIF effect
+            let delay = 10; // Delay between frames in milliseconds
             // Implement the logic to create a GIF effect based on the current and target aspect ratios
-            for (let frame = 0; frame < 60; frame++) {
-                setTimeout(() => {}, 200); // Sleep for 200ms between frames (adjust as needed)
+            function animateZoomLoop() {
+                if (i >= maxFrames) {
+                    return; // Stop the animation after reaching the maximum number of frames
+                }
+                
                 // move the target rectengle corners toawards canvas corners then scale the image behind to match the zoom
                 // Implement the zooming and warping logic here
                 imageInRect = {
-                    x: (handleRect.x) * (1 - interpolation),
-                    y: (handleRect.y) * (1 - interpolation),
-                    width: 0,
-                    height: 0
+                    x1: (handleRect.x) * (1 - interpolation),
+                    y1: (handleRect.y) * (1 - interpolation),
+                    x2: (handleRect.x + handleRect.width) * interpolation,
+                    y2: (canvas.height - (handleRect.y + handleRect.height)) * interpolation
                 };
-                imageInRect.width = handleRect.width + (handleRect.x - imageInRect.x);
-                imageInRect.height = handleRect.height + (handleRect.y - imageInRect.y);
-                imageInRect.width = imageInRect.width * (1 + interpolation);
-                imageInRect.height = imageInRect.height * (1 + interpolation);
+                
+                canvasRect = {
+                    x1: imageInRect.x1 - (imageInRect.width - canvas.width) / 2,
+                    y1: imageInRect.y1 - (imageInRect.height - canvas.height) / 2,
+                    x2: 0,
+                    y2: 0
+                };
+
 
                 // Clear the canvas and draw the image in the new rectangle
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, canvasRect.x, canvasRect.y, canvasRect.width, canvasRect.height);
                 ctx.drawImage(img, imageInRect.x, imageInRect.y, imageInRect.width, imageInRect.height);
-                ctx.drawImage(img, handleRect.x, handleRect.y, handleRect.width, handleRect.height);
+                
+                interpolation += 1/maxFrames; // Increment interpolation for the next frame
+                
+                i++;
+                setTimeout(animateZoomLoop, delay);
             }
+            animateZoomLoop();
         }
 
     </script>
