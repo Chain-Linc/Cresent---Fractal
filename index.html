@@ -255,31 +255,31 @@
             let delay = 10; // Delay between frames in milliseconds
             // Implement the logic to create a GIF effect based on the current and target aspect ratios
             function animateZoomLoop() {
-                if (i >= maxFrames) {
+                if (i > maxFrames) {
                     return; // Stop the animation after reaching the maximum number of frames
                 }
                 
                 // move the target rectengle corners toawards canvas corners then scale the image behind to match the zoom
                 // Implement the zooming and warping logic here
                 imageInRect = {
-                    x1: (handleRect.x) * (1 - interpolation),
-                    y1: (handleRect.y) * (1 - interpolation),
-                    x2: (handleRect.x + handleRect.width) * interpolation,
-                    y2: (canvas.height - (handleRect.y + handleRect.height)) * interpolation
+                    x1: handleRect.x * (1 - interpolation),
+                    y1: handleRect.y * (1 - interpolation),
+                    x2: handleRect.x + handleRect.width + ((canvas.width - (handleRect.x + handleRect.width)) * interpolation),
+                    y2: handleRect.y + handleRect.height + ((canvas.height - (handleRect.y + handleRect.height)) * interpolation)
                 };
                 
                 canvasRect = {
-                    x1: imageInRect.x1 - (imageInRect.width - canvas.width) / 2,
-                    y1: imageInRect.y1 - (imageInRect.height - canvas.height) / 2,
-                    x2: 0,
-                    y2: 0
+                    x1: 0 - (handleRect.x - imageInRect.x1),
+                    y1: 0 - (handleRect.y - imageInRect.y1),
+                    x2: canvas.width - ((handleRect.x + handleRect.width) - imageInRect.x2),
+                    y2: canvas.height - ((handleRect.y + handleRect.height) - imageInRect.y2)
                 };
 
 
                 // Clear the canvas and draw the image in the new rectangle
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, canvasRect.x, canvasRect.y, canvasRect.width, canvasRect.height);
-                ctx.drawImage(img, imageInRect.x, imageInRect.y, imageInRect.width, imageInRect.height);
+                ctx.drawImage(img, canvasRect.x1, canvasRect.y1, canvasRect.x2 - canvasRect.x1, canvasRect.y2 - canvasRect.y1);
+                ctx.drawImage(img, imageInRect.x1, imageInRect.y1, imageInRect.x2 - imageInRect.x1, imageInRect.y2 - imageInRect.y1);
                 
                 interpolation += 1/maxFrames; // Increment interpolation for the next frame
                 
