@@ -28,7 +28,6 @@
     <!-- Canvas element -->
     <canvas id="imageCanvas"></canvas>
     <button id="convertButton">Convert Image to GIF</button>
-    <link id="converted image">123</link>
 
     <script type="importmap">
     {
@@ -69,7 +68,7 @@
         let rectangles = [];
         let resizeVector = null; // To track which handle is being dragged
         let renderingImg = true; // Flag to indicate if the image is currently being rendered
-
+        let generating = false;
 
         // Handle Mouse Down event for resizing handles
         canvas.addEventListener('mousedown', handleMouseDown);
@@ -114,18 +113,36 @@
                 tempCtx.drawImage(processingCanvas, 0, 0, processingCanvas.width, processingCanvas.height);
             }
 
-            // Update the image source with the final offscreen state
+            // 1. ALWAYS attach your event listeners BEFORE setting the src
+            const parsePromise = new Promise((resolve, reject) => {
+                img.onload = () => {
+                    // Clean up listeners to prevent memory leaks
+                    img.onload = null;
+                    img.onerror = null;
+                    resolve();
+                };
+                img.onerror = (err) => {
+                    img.onload = null;
+                    img.onerror = null;
+                    reject(err);
+                };
+            });
+
+            // 2. Now safely update the image source
             img.src = processingCanvas.toDataURL(); 
 
-            // Wait asynchronously for the data URL to be parsed by the browser
+            // 3. Check if it completed synchronously (common for data URLs), otherwise await the promise
             if (!img.complete) {
-                await new Promise((resolve) => {
-                    img.onload = resolve;
-                    img.onerror = resolve; 
-                });
+                try {
+                    await parsePromise;
+                } catch (error) {
+                    console.error("Failed to parse image data URL:", error);
+                    renderingImg = false;
+                    return; // or handle error gracefully
+                }
             }
 
-            console.log("Final image successfully loaded!");
+            console.log("Final image successfully rendered!");
             renderingImg = false;
         }
 
@@ -136,7 +153,7 @@
             const file = e.target.files[0];
             
             // Ensure a file was actually selected
-            if (!file) return;
+            if (!file || generating === true) return;
 
             // 1. First, define what happens when the original image loads
             ogImg.onload = function() {
@@ -259,30 +276,32 @@
             // (debug) draw green dot where mouse is clicked
             // drawPoint(ctx, mousePos.x, mousePos.y, 2, 'green');
             // Implement logic to detect if a handle is clicked and start resizing
-            for (let i = 0; i < rectangles.length; i++) {
-                const rect = rectangles[i];
-                // offset slightly down and to the right gets worse as farther out (fixed by adjusting margin above and finding mouse coordinates relative to canvas instead of window)
-                if (mousePos.x >= rect.x && mousePos.x <= rect.x + handleSize &&
-                    mousePos.y >= rect.y && mousePos.y <= rect.y + handleSize) {
-                    // Start resizing logic here
-                    if (i === 0) { // Top-left corner
-                        resizeVector = [-1, -1];
-                    } else if (i === 1) { // Top-right corner
-                        resizeVector = [1, -1];
-                    } else if (i === 2) { // Bottom-left corner
-                        resizeVector = [-1, 1];
-                    } else if (i === 3) { // Bottom-right corner
-                        resizeVector = [1, 1];
-                    } else if (i === 4) { // Top midpoint
-                        resizeVector = [0, -1];
-                    } else if (i === 5) { // Bottom midpoint
-                        resizeVector = [0, 1];
-                    } else if (i === 6) { // Left midpoint
-                        resizeVector = [-1, 0];
-                    } else if (i === 7) { // Right midpoint
-                        resizeVector = [1, 0];
+            if (generating === false) {
+                for (let i = 0; i < rectangles.length; i++) {
+                    const rect = rectangles[i];
+                    // offset slightly down and to the right gets worse as farther out (fixed by adjusting margin above and finding mouse coordinates relative to canvas instead of window)
+                    if (mousePos.x >= rect.x && mousePos.x <= rect.x + handleSize &&
+                        mousePos.y >= rect.y && mousePos.y <= rect.y + handleSize) {
+                        // Start resizing logic here
+                        if (i === 0) { // Top-left corner
+                            resizeVector = [-1, -1];
+                        } else if (i === 1) { // Top-right corner
+                            resizeVector = [1, -1];
+                        } else if (i === 2) { // Bottom-left corner
+                            resizeVector = [-1, 1];
+                        } else if (i === 3) { // Bottom-right corner
+                            resizeVector = [1, 1];
+                        } else if (i === 4) { // Top midpoint
+                            resizeVector = [0, -1];
+                        } else if (i === 5) { // Bottom midpoint
+                            resizeVector = [0, 1];
+                        } else if (i === 6) { // Left midpoint
+                            resizeVector = [-1, 0];
+                        } else if (i === 7) { // Right midpoint
+                            resizeVector = [1, 0];
+                        }
+                        break;
                     }
-                    break;
                 }
             }
         }
@@ -293,7 +312,7 @@
         }
 
         function handleMouseMove(e) {
-            if (resizeVector) {
+            if (resizeVector && generating === false) {
                 // Implement resizing logic based on mouse movement and resizeVector
                 const mousePos = getCanvasMousePosition(canvas, e);
                 // Update handleRect dimensions based on mouse position and resizeVector
@@ -317,21 +336,21 @@
             }
         }
 
+        function removeButton() {
+            convertButton.remove();
+        }
+
         function handleConvertToGIF() {
+            generating = true;
             console.log("starting generating gif")
-            
-            // chnage button to generating
-            document.getElementById("convertButton").textContent = "Generating...";
-
-
-            // start at static render then zoom towards the target rectangle, then repeat the process to create a GIF effect until zoom reaches the target and photo resets
-            const currentAspectRatio = canvas.width / canvas.height;
-            const targetAspectRatio = handleRect.width / handleRect.height;
-
-            renderRepeatCanvas(10);
+            requestAnimationFrame(removeButton);
+            requestAnimationFrame((t) => renderRepeatCanvas(10));
 
             const frameCollection = [];
             
+            // start at static render then zoom towards the target rectangle, then repeat the process to create a GIF effect until zoom reaches the target and photo resets
+            const currentAspectRatio = canvas.width / canvas.height;
+            const targetAspectRatio = handleRect.width / handleRect.height;
             let interpolation = 0; // Start with no zoom
             let increment = 0.08; // Set a maximum number of frames for the GIF effect
             let delay = 0; // Delay between frames in milliseconds
@@ -340,7 +359,6 @@
             console.log(interpolation, increment, interpolation * increment);
 
             async function animateZoomLoop() {
-                document.getElementById("convertButton").textContent = "Generating" + ".".repeat(Math.round(interpolation/0.05)%3);
                 // move the target rectengle corners toawards canvas corners then scale the image behind to match the zoom
                 // Implement the zooming and warping logic here
                 const imageInRect = {
@@ -389,7 +407,7 @@
                 } else {
                     // --- 3. ANIMATION COMPLETED: Run local encoding using a pure promise chain ---
                     console.log("Render loop complete. Encoding frames locally on main thread...");
-                    
+
                     const output = await encode({
                     width: canvas.width,
                     height: canvas.height,
@@ -397,7 +415,16 @@
                     })
 
                     const blob = new Blob([output], { type: 'image/gif' })
-                    window.open(URL.createObjectURL(blob))
+                    
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(blob);
+                    link.textContent = "Download GIF";
+                    link.target = "_blank"; // Opens in a new tab
+                    document.body.append(link);
+
+
+
+                    
                 }
             }
             animateZoomLoop()
