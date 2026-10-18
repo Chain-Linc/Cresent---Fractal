@@ -318,6 +318,11 @@
 
         function handleConvertToGIF() {
             console.log("starting generating gif")
+            
+            // chnage button to generating
+            document.getElementById("convertButton").textContent = "Generating...";
+
+
             // start at static render then zoom towards the target rectangle, then repeat the process to create a GIF effect until zoom reaches the target and photo resets
             const currentAspectRatio = canvas.width / canvas.height;
             const targetAspectRatio = handleRect.width / handleRect.height;
@@ -334,6 +339,7 @@
             console.log(interpolation, increment, interpolation * increment);
 
             async function animateZoomLoop() {
+                document.getElementById("convertButton").textContent = "Generating" + ".".repeat(Math.round(interpolation/0.05)%3);
                 // move the target rectengle corners toawards canvas corners then scale the image behind to match the zoom
                 // Implement the zooming and warping logic here
                 const imageInRect = {
