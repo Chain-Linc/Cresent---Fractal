@@ -32,10 +32,15 @@
     <script>
         const imageLoader = document.getElementById('imageLoader');
         const canvas = document.getElementById('imageCanvas');
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const convertButton = document.getElementById('convertButton');
 
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+
+        let ogImg = new Image();
         let img = new Image();
+
         let handleRect = {
             line: 0,
             x: 0,
@@ -47,6 +52,8 @@
         let handleSize = 0;
         let rectangles = [];
         let resizeVector = null; // To track which handle is being dragged
+        let renderingImg = true; // Flag to indicate if the image is currently being rendered
+
 
         // Handle Mouse Down event for resizing handles
         canvas.addEventListener('mousedown', handleMouseDown);
@@ -62,58 +69,96 @@
             }
         });
 
-        function renderCanvas() {
+        async function renderCanvas() {
             // Clear the canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             // Draw the image stretched to fit the canvas
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            // Draw the handle rectangle on top of the image
+            ctx.drawImage(ogImg, 0, 0, canvas.width, canvas.height);
             drawHandleRect();
+            drawHandleRectAndImage();
         }
 
+        async function renderRepeatCanvas(repeatCount = 5) {
+            renderingImg = true;
+            console.log(`Rendering repeat canvas with handle rectangle at (${handleRect.x}, ${handleRect.y}) and dimensions: ${handleRect.width}x${handleRect.height}`);
+            tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+            tempCtx.drawImage(ogImg, 0, 0, tempCanvas.width, tempCanvas.height);
+
+            for (let i = 0; i < repeatCount; i++) {
+                tempCtx.clearRect(0, 0, canvas.width, canvas.height);
+                tempCtx.drawImage(ogImg, 0, 0, canvas.width, canvas.height);
+                tempCtx.drawImage(tempCanvas, handleRect.x, handleRect.y, handleRect.width, handleRect.height);
+                tempCanvas.canvas = tempCtx.canvas; // Update the tempCanvas reference to the current state
+            }
+            // 1. Update the image source
+            img.src = tempCanvas.toDataURL(); 
+
+            // 2. Wait asynchronously if it's not already cached/loaded
+            if (!img.complete) {
+                await new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.onerror = resolve; // Prevent hanging if the dataURL fails
+                });
+            }
+
+            // 3. This will only run AFTER the image is fully loaded
+            console.log("Final image successfully loaded!");
+            renderingImg = false;
+        }
+
+
         function handleImageUpload(e) {
+            console.log("Image upload initiated.");
             const file = e.target.files[0];
             
             // Ensure a file was actually selected
             if (!file) return;
 
-            // When the image loads, draw it to the canvas
-            img.onload = function() {
-                // Resize the canvas to match the uploaded image dimensions
-                canvas.width = window.innerWidth-10; // Set canvas width to the page width
-                canvas.height = (window.innerWidth-10) * (img.height / img.width); // Maintain aspect ratio based on the image's dimensions
+            // 1. First, define what happens when the original image loads
+            ogImg.onload = function() {
+                console.log(`Original image loaded: ${ogImg.width}x${ogImg.height}`);
+
+                // Set canvas width and maintain aspect ratio
+                canvas.width = window.innerWidth - 10; 
+                canvas.height = (window.innerWidth - 10) * (ogImg.height / ogImg.width); 
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                tempCtx.width = tempCanvas.width;
+                tempCtx.height = tempCanvas.height;
                 console.log(`Canvas resized to: ${canvas.width}x${canvas.height}`);
-                
-                // Add rect target manipulators for the repeating image zooming effect
-                let margin = canvas.width / 8; // Set margin to 1/32 of the canvas width
+
+                // Initialize target manipulators
+                let margin = canvas.width / 8; 
                 handleRect = {
-                    line: canvas.width / 256, // Set line width relative to the rectangle size
+                    line: canvas.width / 256, 
                     x: margin,
                     y: margin,
                     width: canvas.width - (margin * 2),
                     height: canvas.height - (margin * 2)
                 };
+                console.log(`Handle rectangle initialized.`);
 
-                renderCanvas();
-                console.log(`Image drawn at (0,0) with dimensions: ${img.width}x${img.height}`);
+                // 2. Define what happens when the secondary 'img' loads (if it relies on ogImg)
+                // Replace your old img.onload function with this single line:
+                img.addEventListener('load', function() { renderCanvas(); URL.revokeObjectURL(img.src); }, { once: true });
 
-                // Clean up the memory allocated for the object URL
-                URL.revokeObjectURL(img.src);
+                img.src = ogImg.src;
+
             };
 
-            // Create a temporary local URL pointing to the uploaded file
-            img.src = URL.createObjectURL(file);
+            // 3. CRITICAL FIX: Set the source OUTSIDE the onload block so it actually triggers
+            ogImg.src = URL.createObjectURL(file);
+
         }
-        
+
+        function drawHandleRectAndImage() {
+            renderRepeatCanvas();
+            ctx.drawImage(img, handleRect.x, handleRect.y, handleRect.width, handleRect.height);
+            drawHandleRect();
+        }
 
         function drawHandleRect() {
-            // 1. Ensure ctx is correctly referenced and handleRect properties match lowercase/uppercase expectations.
-            // 2. Fallback check: if width/height are named 'w' or 'h' instead of 'width' or 'height', map them.
-            console.log(`Drawing rectangle at (${handleRect.x}, ${handleRect.y}) with width ${handleRect.width} and height ${handleRect.height}`);
-            
-            // draw image in the rectangle area
-            ctx.drawImage(img, handleRect.x, handleRect.y, handleRect.width, handleRect.height);
-            
+
             ctx.strokeStyle = 'red';
             ctx.lineWidth = handleRect.line;
             
@@ -246,66 +291,71 @@
 
         function handleConvertToGIF() {
             // start at static render then zoom towards the target rectangle, then repeat the process to create a GIF effect until zoom reaches the target and photo resets
-            currentAspectRatio = img.width / img.height;
+            currentAspectRatio = canvas.width / canvas.height;
             targetAspectRatio = handleRect.width / handleRect.height;
-            interpolation = 0; // Start with no zoom
             
-            let i = 0;
-            let maxFrames = 10; // Set a maximum number of frames for the GIF effect
-            let delay = 500; // Delay between frames in milliseconds
-            // Implement the logic to create a GIF effect based on the current and target aspect ratios
-            function animateZoomLoop() {
-                if (i > maxFrames) {
-                    return; // Stop the animation after reaching the maximum number of frames
+            renderRepeatCanvas(10);
+            let time = 0;
+            while (time < 10) {
+                time++;
+            
+                let interpolation = 0; // Start with no zoom
+                let i = 0;
+                let maxFrames = 100; // Set a maximum number of frames for the GIF effect
+                let delay = 0; // Delay between frames in milliseconds
+                // Implement the logic to create a GIF effect based on the current and target aspect ratios
+                function animateZoomLoop() {
+                    if (i > maxFrames) {
+                        return; // Stop the animation after reaching the maximum number of frames
+                    }
+                    
+                    // move the target rectengle corners toawards canvas corners then scale the image behind to match the zoom
+                    // Implement the zooming and warping logic here
+                    imageInRect = {
+                        x1: handleRect.x * (1 - interpolation),
+                        y1: handleRect.y * (1 - interpolation),
+                        x2: handleRect.x + handleRect.width + ((canvas.width - (handleRect.x + handleRect.width)) * interpolation),
+                        y2: handleRect.y + handleRect.height + ((canvas.height - (handleRect.y + handleRect.height)) * interpolation)
+                    };
+
+                    console.log("\n")
+                    
+                    console.log(`${handleRect.x}, ${handleRect.y}, ${handleRect.width}, ${handleRect.height}`);
+
+                    scaleX1 = (handleRect.x - imageInRect.x1) / (handleRect.width/2);
+                    scaleY1 = (handleRect.y - imageInRect.y1) / (handleRect.height/2);
+                    scaleX2 = ((handleRect.x + handleRect.width) - imageInRect.x2) / (handleRect.width/2);
+                    scaleY2 = ((handleRect.y + handleRect.height) - imageInRect.y2) / (handleRect.height/2);
+
+                    if (!scaleX1) { scaleX1 = 0; }
+                    if (!scaleY1) { scaleY1 = 0; }
+                    if (!scaleX2) { scaleX2 = 0; }
+                    if (!scaleY2) { scaleY2 = 0; }
+
+                    console.log(`Scale factors: scaleX1=${scaleX1}, scaleY1=${scaleY1}, scaleX2=${scaleX2}, scaleY2=${scaleY2}`);
+
+                    canvasRect = {
+                        x1: 0 - ((canvas.width/2) * scaleX1),
+                        y1: 0 - ((canvas.height/2) * scaleY1),
+                        x2: canvas.width - ((canvas.width/2) * scaleX2),
+                        y2: canvas.height - ((canvas.height/2) * scaleY2)
+                    };
+                    
+                    console.log(`Canvas rectangle: x1=${canvasRect.x1}, y1=${canvasRect.y1}, x2=${canvasRect.x2}, y2=${canvasRect.y2}`);
+
+                    // Clear the canvas and draw the image in the new rectangle
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(ogImg, canvasRect.x1, canvasRect.y1, canvasRect.x2 - canvasRect.x1, canvasRect.y2 - canvasRect.y1);
+                    ctx.drawImage(img, imageInRect.x1, imageInRect.y1, imageInRect.x2 - imageInRect.x1, imageInRect.y2 - imageInRect.y1);
+                    
+                    interpolation += 1/maxFrames; // Increment interpolation for the next frame
+                    
+                    i++;
+                    setTimeout(animateZoomLoop, delay);
                 }
-                
-                // move the target rectengle corners toawards canvas corners then scale the image behind to match the zoom
-                // Implement the zooming and warping logic here
-                imageInRect = {
-                    x1: handleRect.x * (1 - interpolation),
-                    y1: handleRect.y * (1 - interpolation),
-                    x2: handleRect.x + handleRect.width + ((canvas.width - (handleRect.x + handleRect.width)) * interpolation),
-                    y2: handleRect.y + handleRect.height + ((canvas.height - (handleRect.y + handleRect.height)) * interpolation)
-                };
-
-                console.log("\n")
-                
-                console.log(`${handleRect.x}, ${handleRect.y}, ${handleRect.width}, ${handleRect.height}`);
-
-                scaleX1 = (handleRect.x - imageInRect.x1) / (handleRect.width/2);
-                scaleY1 = (handleRect.y - imageInRect.y1) / (handleRect.height/2);
-                scaleX2 = ((handleRect.x + handleRect.width) - imageInRect.x2) / (handleRect.width/2);
-                scaleY2 = ((handleRect.y + handleRect.height) - imageInRect.y2) / (handleRect.height/2);
-
-                if (!scaleX1) { scaleX1 = 0; }
-                if (!scaleY1) { scaleY1 = 0; }
-                if (!scaleX2) { scaleX2 = 0; }
-                if (!scaleY2) { scaleY2 = 0; }
-
-                console.log(`Scale factors: scaleX1=${scaleX1}, scaleY1=${scaleY1}, scaleX2=${scaleX2}, scaleY2=${scaleY2}`);
-
-                canvasRect = {
-                    x1: 0 - ((canvas.width/2) * scaleX1),
-                    y1: 0 - ((canvas.height/2) * scaleY1),
-                    x2: canvas.width - ((canvas.width/2) * scaleX2),
-                    y2: canvas.height - ((canvas.height/2) * scaleY2)
-                };
-                
-                console.log(`Canvas rectangle: x1=${canvasRect.x1}, y1=${canvasRect.y1}, x2=${canvasRect.x2}, y2=${canvasRect.y2}`);
-
-                // Clear the canvas and draw the image in the new rectangle
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, canvasRect.x1, canvasRect.y1, canvasRect.x2 - canvasRect.x1, canvasRect.y2 - canvasRect.y1);
-                ctx.drawImage(img, imageInRect.x1, imageInRect.y1, imageInRect.x2 - imageInRect.x1, imageInRect.y2 - imageInRect.y1);
-                
-                interpolation += 1/maxFrames; // Increment interpolation for the next frame
-                
-                i++;
-                setTimeout(animateZoomLoop, delay);
+                animateZoomLoop();
             }
-            animateZoomLoop();
         }
-
     </script>
 
 </body>
