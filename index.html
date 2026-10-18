@@ -182,7 +182,7 @@
 
         function drawHandleRectAndImage() {
             renderRepeatCanvas();
-            ctx.drawImage(img, handleRect.x, handleRect.y, handleRect.width, handleRect.height);
+            ctx.drawImage(ogImg, handleRect.x, handleRect.y, handleRect.width, handleRect.height);
             drawHandleRect();
         }
 
@@ -226,9 +226,7 @@
 
         function onHandleRectChange(newRect) {
             handleRect = newRect;
-            // Redraw the image with the new rectangle dimensions
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, handleRect.x, handleRect.y, handleRect.width, handleRect.height);
+            drawHandleRectAndImage();
         }
 
         function getCanvasMousePosition(canvas, event) {
@@ -329,11 +327,11 @@
             const frameCollection = [];
             
             let interpolation = 0; // Start with no zoom
-            let i = 0;
-            let maxFrames = 20; // Set a maximum number of frames for the GIF effect
+            let increment = 0.02; // Set a maximum number of frames for the GIF effect
             let delay = 0; // Delay between frames in milliseconds
             let scaleX1 = 0, scaleX2 = 0, scaleY1 = 0, scaleY2 = 0;
 
+            console.log(interpolation, increment, interpolation * increment);
 
             async function animateZoomLoop() {
                 // move the target rectengle corners toawards canvas corners then scale the image behind to match the zoom
@@ -346,9 +344,8 @@
                 };
 
                 console.log("\n")
+                console.log(interpolation)
                 
-                console.log(`${handleRect.x}, ${handleRect.y}, ${handleRect.width}, ${handleRect.height}`);
-
                 scaleX1 = (handleRect.x - imageInRect.x1) / (handleRect.width/2);
                 scaleY1 = (handleRect.y - imageInRect.y1) / (handleRect.height/2);
                 scaleX2 = ((handleRect.x + handleRect.width) - imageInRect.x2) / (handleRect.width/2);
@@ -359,17 +356,12 @@
                 if (!scaleX2) { scaleX2 = 0; }
                 if (!scaleY2) { scaleY2 = 0; }
 
-                console.log(`Scale factors: scaleX1=${scaleX1}, scaleY1=${scaleY1}, scaleX2=${scaleX2}, scaleY2=${scaleY2}`);
-
                 const canvasRect = {
                     x1: 0 - ((canvas.width/2) * scaleX1),
                     y1: 0 - ((canvas.height/2) * scaleY1),
                     x2: canvas.width - ((canvas.width/2) * scaleX2),
                     y2: canvas.height - ((canvas.height/2) * scaleY2)
                 };
-                
-                console.log(`Canvas rectangle: x1=${canvasRect.x1}, y1=${canvasRect.y1}, x2=${canvasRect.x2}, y2=${canvasRect.y2}`);
-
                 // Clear the canvas and draw the image in the new rectangle
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(ogImg, canvasRect.x1, canvasRect.y1, canvasRect.x2 - canvasRect.x1, canvasRect.y2 - canvasRect.y1);
@@ -383,10 +375,9 @@
                     delay: 100            // Frame delay in milliseconds
                 });
 
-                interpolation += 1/maxFrames; // Increment interpolation for the next frame
-                i++;
-
-                if (i < maxFrames) {
+                interpolation = interpolation + increment;
+                    
+                if (1 > interpolation) {
                     animateZoomLoop();
                 } else {
                     // --- 3. ANIMATION COMPLETED: Run local encoding using a pure promise chain ---
