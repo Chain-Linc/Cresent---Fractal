@@ -29,12 +29,19 @@
     <canvas id="imageCanvas"></canvas>
     <button id="convertButton">Convert Image to GIF</button>
 
+    <!-- Load the main gif.js library -->
+    <script type="module" src="https://unpkg.com/modern-gif"></script>
+
+
     <script>
         const imageLoader = document.getElementById('imageLoader');
         const canvas = document.getElementById('imageCanvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const convertButton = document.getElementById('convertButton');
 
+        // Create a secondary hidden canvas for processing if you haven't already
+        const processingCanvas = document.createElement('canvas');
+        const processingCtx = processingCanvas.getContext('2d');
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
 
@@ -80,31 +87,40 @@
 
         async function renderRepeatCanvas(repeatCount = 5) {
             renderingImg = true;
-            console.log(`Rendering repeat canvas with handle rectangle at (${handleRect.x}, ${handleRect.y}) and dimensions: ${handleRect.width}x${handleRect.height}`);
-            tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-            tempCtx.drawImage(ogImg, 0, 0, tempCanvas.width, tempCanvas.height);
+            // 1. Initialize processingCanvas with the original image
+            processingCtx.clearRect(0, 0, processingCanvas.width, processingCanvas.height);
+            processingCtx.drawImage(ogImg, 0, 0, processingCanvas.width, processingCanvas.height);
 
             for (let i = 0; i < repeatCount; i++) {
-                tempCtx.clearRect(0, 0, canvas.width, canvas.height);
-                tempCtx.drawImage(ogImg, 0, 0, canvas.width, canvas.height);
-                tempCtx.drawImage(tempCanvas, handleRect.x, handleRect.y, handleRect.width, handleRect.height);
-                tempCanvas.canvas = tempCtx.canvas; // Update the tempCanvas reference to the current state
+                // Clear our processing buffer canvas
+                processingCtx.clearRect(0, 0, processingCanvas.width, processingCanvas.height);
+                
+                // Draw the background base image onto the processing buffer
+                processingCtx.drawImage(ogImg, 0, 0, processingCanvas.width, processingCanvas.height);
+                
+                // Nest the *previous* state (processingCanvas) into the specified rectangle
+                processingCtx.drawImage(tempCanvas, handleRect.x, handleRect.y, handleRect.width, handleRect.height);
+                
+                // Copy the newly accumulated frame back to tempCanvas for the next recursive loop pass
+                tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+                tempCtx.drawImage(processingCanvas, 0, 0, processingCanvas.width, processingCanvas.height);
             }
-            // 1. Update the image source
-            img.src = tempCanvas.toDataURL(); 
 
-            // 2. Wait asynchronously if it's not already cached/loaded
+            // Update the image source with the final offscreen state
+            img.src = processingCanvas.toDataURL(); 
+
+            // Wait asynchronously for the data URL to be parsed by the browser
             if (!img.complete) {
                 await new Promise((resolve) => {
                     img.onload = resolve;
-                    img.onerror = resolve; // Prevent hanging if the dataURL fails
+                    img.onerror = resolve; 
                 });
             }
 
-            // 3. This will only run AFTER the image is fully loaded
             console.log("Final image successfully loaded!");
             renderingImg = false;
         }
+
 
 
         function handleImageUpload(e) {
@@ -121,10 +137,16 @@
                 // Set canvas width and maintain aspect ratio
                 canvas.width = window.innerWidth - 10; 
                 canvas.height = (window.innerWidth - 10) * (ogImg.height / ogImg.width); 
+                
+                processingCanvas.width = canvas.width;
+                processingCanvas.height = canvas.height;
+                processingCtx.width = processingCanvas.width;
+                processingCtx.height = processingCanvas.height;
                 tempCanvas.width = canvas.width;
                 tempCanvas.height = canvas.height;
                 tempCtx.width = tempCanvas.width;
                 tempCtx.height = tempCanvas.height;
+
                 console.log(`Canvas resized to: ${canvas.width}x${canvas.height}`);
 
                 // Initialize target manipulators
@@ -293,67 +315,95 @@
             // start at static render then zoom towards the target rectangle, then repeat the process to create a GIF effect until zoom reaches the target and photo resets
             currentAspectRatio = canvas.width / canvas.height;
             targetAspectRatio = handleRect.width / handleRect.height;
-            
+
             renderRepeatCanvas(10);
-            let time = 0;
-            while (time < 10) {
-                time++;
+
+            const frameCollection = [];
             
-                let interpolation = 0; // Start with no zoom
-                let i = 0;
-                let maxFrames = 100; // Set a maximum number of frames for the GIF effect
-                let delay = 0; // Delay between frames in milliseconds
-                // Implement the logic to create a GIF effect based on the current and target aspect ratios
-                function animateZoomLoop() {
-                    if (i > maxFrames) {
-                        return; // Stop the animation after reaching the maximum number of frames
-                    }
-                    
-                    // move the target rectengle corners toawards canvas corners then scale the image behind to match the zoom
-                    // Implement the zooming and warping logic here
-                    imageInRect = {
-                        x1: handleRect.x * (1 - interpolation),
-                        y1: handleRect.y * (1 - interpolation),
-                        x2: handleRect.x + handleRect.width + ((canvas.width - (handleRect.x + handleRect.width)) * interpolation),
-                        y2: handleRect.y + handleRect.height + ((canvas.height - (handleRect.y + handleRect.height)) * interpolation)
-                    };
+            let interpolation = 0; // Start with no zoom
+            let i = 0;
+            let maxFrames = 20; // Set a maximum number of frames for the GIF effect
+            let delay = 0; // Delay between frames in milliseconds
+            
+            function animateZoomLoop() {
+                // move the target rectengle corners toawards canvas corners then scale the image behind to match the zoom
+                // Implement the zooming and warping logic here
+                imageInRect = {
+                    x1: handleRect.x * (1 - interpolation),
+                    y1: handleRect.y * (1 - interpolation),
+                    x2: handleRect.x + handleRect.width + ((canvas.width - (handleRect.x + handleRect.width)) * interpolation),
+                    y2: handleRect.y + handleRect.height + ((canvas.height - (handleRect.y + handleRect.height)) * interpolation)
+                };
 
-                    console.log("\n")
-                    
-                    console.log(`${handleRect.x}, ${handleRect.y}, ${handleRect.width}, ${handleRect.height}`);
+                console.log("\n")
+                
+                console.log(`${handleRect.x}, ${handleRect.y}, ${handleRect.width}, ${handleRect.height}`);
 
-                    scaleX1 = (handleRect.x - imageInRect.x1) / (handleRect.width/2);
-                    scaleY1 = (handleRect.y - imageInRect.y1) / (handleRect.height/2);
-                    scaleX2 = ((handleRect.x + handleRect.width) - imageInRect.x2) / (handleRect.width/2);
-                    scaleY2 = ((handleRect.y + handleRect.height) - imageInRect.y2) / (handleRect.height/2);
+                scaleX1 = (handleRect.x - imageInRect.x1) / (handleRect.width/2);
+                scaleY1 = (handleRect.y - imageInRect.y1) / (handleRect.height/2);
+                scaleX2 = ((handleRect.x + handleRect.width) - imageInRect.x2) / (handleRect.width/2);
+                scaleY2 = ((handleRect.y + handleRect.height) - imageInRect.y2) / (handleRect.height/2);
 
-                    if (!scaleX1) { scaleX1 = 0; }
-                    if (!scaleY1) { scaleY1 = 0; }
-                    if (!scaleX2) { scaleX2 = 0; }
-                    if (!scaleY2) { scaleY2 = 0; }
+                if (!scaleX1) { scaleX1 = 0; }
+                if (!scaleY1) { scaleY1 = 0; }
+                if (!scaleX2) { scaleX2 = 0; }
+                if (!scaleY2) { scaleY2 = 0; }
 
-                    console.log(`Scale factors: scaleX1=${scaleX1}, scaleY1=${scaleY1}, scaleX2=${scaleX2}, scaleY2=${scaleY2}`);
+                console.log(`Scale factors: scaleX1=${scaleX1}, scaleY1=${scaleY1}, scaleX2=${scaleX2}, scaleY2=${scaleY2}`);
 
-                    canvasRect = {
-                        x1: 0 - ((canvas.width/2) * scaleX1),
-                        y1: 0 - ((canvas.height/2) * scaleY1),
-                        x2: canvas.width - ((canvas.width/2) * scaleX2),
-                        y2: canvas.height - ((canvas.height/2) * scaleY2)
-                    };
-                    
-                    console.log(`Canvas rectangle: x1=${canvasRect.x1}, y1=${canvasRect.y1}, x2=${canvasRect.x2}, y2=${canvasRect.y2}`);
+                canvasRect = {
+                    x1: 0 - ((canvas.width/2) * scaleX1),
+                    y1: 0 - ((canvas.height/2) * scaleY1),
+                    x2: canvas.width - ((canvas.width/2) * scaleX2),
+                    y2: canvas.height - ((canvas.height/2) * scaleY2)
+                };
+                
+                console.log(`Canvas rectangle: x1=${canvasRect.x1}, y1=${canvasRect.y1}, x2=${canvasRect.x2}, y2=${canvasRect.y2}`);
 
-                    // Clear the canvas and draw the image in the new rectangle
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(ogImg, canvasRect.x1, canvasRect.y1, canvasRect.x2 - canvasRect.x1, canvasRect.y2 - canvasRect.y1);
-                    ctx.drawImage(img, imageInRect.x1, imageInRect.y1, imageInRect.x2 - imageInRect.x1, imageInRect.y2 - imageInRect.y1);
-                    
-                    interpolation += 1/maxFrames; // Increment interpolation for the next frame
-                    
-                    i++;
-                    setTimeout(animateZoomLoop, delay);
+                // Clear the canvas and draw the image in the new rectangle
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(ogImg, canvasRect.x1, canvasRect.y1, canvasRect.x2 - canvasRect.x1, canvasRect.y2 - canvasRect.y1);
+                ctx.drawImage(img, imageInRect.x1, imageInRect.y1, imageInRect.x2 - imageInRect.x1, imageInRect.y2 - imageInRect.y1);
+                
+                gif.addFrame(canvas, { copy: true, delay: 10 });
+
+                const rawPixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    
+                // Push the raw image data object and frame delay to the memory array
+                frameCollection.push({
+                    data: rawPixels.data, // Uint8ClampedArray containing RGBA data
+                    delay: 100            // Frame delay in milliseconds
+                });
+
+                interpolation += 1/maxFrames; // Increment interpolation for the next frame
+                i++;
+
+                if (i < maxFrames) {
+                    animateZoomLoop();
+                } else {
+                    // --- 3. ANIMATION COMPLETED: Run local encoding using a pure promise chain ---
+                    console.log("Render loop complete. Encoding frames locally on main thread...");
+
+                    // modern-gif processes arrays synchronously inside a promise container
+                    modernGif.encode({
+                        width: canvas.width,
+                        height: canvas.height,
+                        frames: frameCollection
+                    })
+                    .then(outputBuffer => {
+                        console.log("GIF generation finished!");
+                        
+                        // Turn raw array buffer back into an image file Blob
+                        const finalBlob = new Blob([outputBuffer], { type: 'image/gif' });
+                        
+                        const imgResult = document.createElement('img');
+                        imgResult.src = URL.createObjectURL(finalBlob);
+                        document.body.appendChild(imgResult);
+                    })
+                    .catch(err => {
+                        console.error("Local synchronous GIF conversion failed:", err);
+                    });
                 }
-                animateZoomLoop();
             }
         }
     </script>
