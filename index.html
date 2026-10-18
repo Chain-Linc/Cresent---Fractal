@@ -268,11 +268,16 @@
                     y2: handleRect.y + handleRect.height + ((canvas.height - (handleRect.y + handleRect.height)) * interpolation)
                 };
                 
+                scaleX1 = (imageInRect.x2 - imageInRect.x1) / canvas.width;
+                scaleY1 = (imageInRect.y2 - imageInRect.y1) / canvas.height;
+                scaleX2 = (handleRect.x + handleRect.width - handleRect.x) / canvas.width;
+                scaleY2 = (handleRect.y + handleRect.height - handleRect.y) / canvas.height;
+
                 canvasRect = {
-                    x1: 0 - (handleRect.x - imageInRect.x1),
-                    y1: 0 - (handleRect.y - imageInRect.y1),
-                    x2: canvas.width - ((handleRect.x + handleRect.width) - imageInRect.x2),
-                    y2: canvas.height - ((handleRect.y + handleRect.height) - imageInRect.y2)
+                    x1: canvas.width * scaleX1,
+                    y1: canvas.height - (handleRect.y - imageInRect.y1) * scaleY1,
+                    x2: canvas.width - ((handleRect.x + handleRect.width) - imageInRect.x2) * scaleX2,
+                    y2: canvas.height - ((handleRect.y + handleRect.height) - imageInRect.y2) * scaleY2s
                 };
 
 
