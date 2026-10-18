@@ -251,8 +251,8 @@
             interpolation = 0; // Start with no zoom
             
             let i = 0;
-            let maxFrames = 100; // Set a maximum number of frames for the GIF effect
-            let delay = 10; // Delay between frames in milliseconds
+            let maxFrames = 10; // Set a maximum number of frames for the GIF effect
+            let delay = 500; // Delay between frames in milliseconds
             // Implement the logic to create a GIF effect based on the current and target aspect ratios
             function animateZoomLoop() {
                 if (i > maxFrames) {
@@ -267,19 +267,31 @@
                     x2: handleRect.x + handleRect.width + ((canvas.width - (handleRect.x + handleRect.width)) * interpolation),
                     y2: handleRect.y + handleRect.height + ((canvas.height - (handleRect.y + handleRect.height)) * interpolation)
                 };
+
+                console.log("\n")
                 
-                scaleX1 = (imageInRect.x2 - imageInRect.x1) / canvas.width;
-                scaleY1 = (imageInRect.y2 - imageInRect.y1) / canvas.height;
-                scaleX2 = (handleRect.x + handleRect.width - handleRect.x) / canvas.width;
-                scaleY2 = (handleRect.y + handleRect.height - handleRect.y) / canvas.height;
+                console.log(`${handleRect.x}, ${handleRect.y}, ${handleRect.width}, ${handleRect.height}`);
+
+                scaleX1 = (handleRect.x - imageInRect.x1) / (handleRect.width/2);
+                scaleY1 = (handleRect.y - imageInRect.y1) / (handleRect.height/2);
+                scaleX2 = ((handleRect.x + handleRect.width) - imageInRect.x2) / (handleRect.width/2);
+                scaleY2 = ((handleRect.y + handleRect.height) - imageInRect.y2) / (handleRect.height/2);
+
+                if (!scaleX1) { scaleX1 = 0; }
+                if (!scaleY1) { scaleY1 = 0; }
+                if (!scaleX2) { scaleX2 = 0; }
+                if (!scaleY2) { scaleY2 = 0; }
+
+                console.log(`Scale factors: scaleX1=${scaleX1}, scaleY1=${scaleY1}, scaleX2=${scaleX2}, scaleY2=${scaleY2}`);
 
                 canvasRect = {
-                    x1: canvas.width * scaleX1,
-                    y1: canvas.height - (handleRect.y - imageInRect.y1) * scaleY1,
-                    x2: canvas.width - ((handleRect.x + handleRect.width) - imageInRect.x2) * scaleX2,
-                    y2: canvas.height - ((handleRect.y + handleRect.height) - imageInRect.y2) * scaleY2s
+                    x1: 0 - ((canvas.width/2) * scaleX1),
+                    y1: 0 - ((canvas.height/2) * scaleY1),
+                    x2: canvas.width - ((canvas.width/2) * scaleX2),
+                    y2: canvas.height - ((canvas.height/2) * scaleY2)
                 };
-
+                
+                console.log(`Canvas rectangle: x1=${canvasRect.x1}, y1=${canvasRect.y1}, x2=${canvasRect.x2}, y2=${canvasRect.y2}`);
 
                 // Clear the canvas and draw the image in the new rectangle
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
