@@ -28,6 +28,7 @@
     <!-- Canvas element -->
     <canvas id="imageCanvas"></canvas>
     <button id="convertButton">Convert Image to GIF</button>
+    <link id="converted image">123</link>
 
     <script type="importmap">
     {
@@ -332,7 +333,7 @@
             const frameCollection = [];
             
             let interpolation = 0; // Start with no zoom
-            let increment = 0.02; // Set a maximum number of frames for the GIF effect
+            let increment = 0.08; // Set a maximum number of frames for the GIF effect
             let delay = 0; // Delay between frames in milliseconds
             let scaleX1 = 0, scaleX2 = 0, scaleY1 = 0, scaleY2 = 0;
 
@@ -378,7 +379,7 @@
                 // Push the raw image data object and frame delay to the memory array
                 frameCollection.push({
                     data: rawPixels.data, // Uint8ClampedArray containing RGBA data
-                    delay: 100            // Frame delay in milliseconds
+                    delay: 200            // Frame delay in milliseconds
                 });
 
                 interpolation = interpolation + increment;
