@@ -29,11 +29,19 @@
     <canvas id="imageCanvas"></canvas>
     <button id="convertButton">Convert Image to GIF</button>
 
-    <!-- Load the main gif.js library -->
-    <script type="module" src="https://unpkg.com/modern-gif"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "modern-gif": "https://unpkg.com/modern-gif@^2.1.0/dist/index.mjs",
+            "modern-palette": "https://unpkg.com/modern-palette@^2.0.0/dist/index.mjs"
+        }
+    }
+    </script>
 
+    <script type="module">
+        import { encode } from 'https://unpkg.com/modern-gif';
+        //import workerUrl from 'modern-gif/worker?url' 
 
-    <script>
         const imageLoader = document.getElementById('imageLoader');
         const canvas = document.getElementById('imageCanvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -41,9 +49,9 @@
 
         // Create a secondary hidden canvas for processing if you haven't already
         const processingCanvas = document.createElement('canvas');
-        const processingCtx = processingCanvas.getContext('2d');
+        const processingCtx = processingCanvas.getContext('2d', { willReadFrequently: true });
         const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
+        const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
 
         let ogImg = new Image();
         let img = new Image();
@@ -81,7 +89,6 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             // Draw the image stretched to fit the canvas
             ctx.drawImage(ogImg, 0, 0, canvas.width, canvas.height);
-            drawHandleRect();
             drawHandleRectAndImage();
         }
 
@@ -249,7 +256,7 @@
         function handleMouseDown(e) {
             console.log(`Mouse down at (${e.offsetX}, ${e.offsetY})`);
             
-            mousePos = getCanvasMousePosition(canvas, e);
+            let mousePos = getCanvasMousePosition(canvas, e);
             // (debug) draw green dot where mouse is clicked
             // drawPoint(ctx, mousePos.x, mousePos.y, 2, 'green');
             // Implement logic to detect if a handle is clicked and start resizing
@@ -312,9 +319,10 @@
         }
 
         function handleConvertToGIF() {
+            console.log("starting generating gif")
             // start at static render then zoom towards the target rectangle, then repeat the process to create a GIF effect until zoom reaches the target and photo resets
-            currentAspectRatio = canvas.width / canvas.height;
-            targetAspectRatio = handleRect.width / handleRect.height;
+            const currentAspectRatio = canvas.width / canvas.height;
+            const targetAspectRatio = handleRect.width / handleRect.height;
 
             renderRepeatCanvas(10);
 
@@ -324,11 +332,13 @@
             let i = 0;
             let maxFrames = 20; // Set a maximum number of frames for the GIF effect
             let delay = 0; // Delay between frames in milliseconds
-            
-            function animateZoomLoop() {
+            let scaleX1 = 0, scaleX2 = 0, scaleY1 = 0, scaleY2 = 0;
+
+
+            async function animateZoomLoop() {
                 // move the target rectengle corners toawards canvas corners then scale the image behind to match the zoom
                 // Implement the zooming and warping logic here
-                imageInRect = {
+                const imageInRect = {
                     x1: handleRect.x * (1 - interpolation),
                     y1: handleRect.y * (1 - interpolation),
                     x2: handleRect.x + handleRect.width + ((canvas.width - (handleRect.x + handleRect.width)) * interpolation),
@@ -351,7 +361,7 @@
 
                 console.log(`Scale factors: scaleX1=${scaleX1}, scaleY1=${scaleY1}, scaleX2=${scaleX2}, scaleY2=${scaleY2}`);
 
-                canvasRect = {
+                const canvasRect = {
                     x1: 0 - ((canvas.width/2) * scaleX1),
                     y1: 0 - ((canvas.height/2) * scaleY1),
                     x2: canvas.width - ((canvas.width/2) * scaleX2),
@@ -364,9 +374,7 @@
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(ogImg, canvasRect.x1, canvasRect.y1, canvasRect.x2 - canvasRect.x1, canvasRect.y2 - canvasRect.y1);
                 ctx.drawImage(img, imageInRect.x1, imageInRect.y1, imageInRect.x2 - imageInRect.x1, imageInRect.y2 - imageInRect.y1);
-                
-                gif.addFrame(canvas, { copy: true, delay: 10 });
-
+            
                 const rawPixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
     
                 // Push the raw image data object and frame delay to the memory array
@@ -383,28 +391,18 @@
                 } else {
                     // --- 3. ANIMATION COMPLETED: Run local encoding using a pure promise chain ---
                     console.log("Render loop complete. Encoding frames locally on main thread...");
+                    
+                    const output = await encode({
+                    width: canvas.width,
+                    height: canvas.height,
+                    frames: frameCollection,
+                    })
 
-                    // modern-gif processes arrays synchronously inside a promise container
-                    modernGif.encode({
-                        width: canvas.width,
-                        height: canvas.height,
-                        frames: frameCollection
-                    })
-                    .then(outputBuffer => {
-                        console.log("GIF generation finished!");
-                        
-                        // Turn raw array buffer back into an image file Blob
-                        const finalBlob = new Blob([outputBuffer], { type: 'image/gif' });
-                        
-                        const imgResult = document.createElement('img');
-                        imgResult.src = URL.createObjectURL(finalBlob);
-                        document.body.appendChild(imgResult);
-                    })
-                    .catch(err => {
-                        console.error("Local synchronous GIF conversion failed:", err);
-                    });
+                    const blob = new Blob([output], { type: 'image/gif' })
+                    window.open(URL.createObjectURL(blob))
                 }
             }
+            animateZoomLoop()
         }
     </script>
 
